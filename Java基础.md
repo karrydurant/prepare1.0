@@ -309,3 +309,78 @@ ldc (load constant) 指令是从常量池中加载各种类型的常量，包括
 
 3.没有则创建新对象并加入常量池：如果字符串常量池中没有相同内容的字符串对象，JVM 会在常量池中创建一个新的字符串
 对象，并将其引用加载到操作数栈中。
+
+## 异常
+
+### ✔️Exception 和 Error 有什么区别
+
+在 Java 中，所有的异常都有一个共同的祖先 java.lang 包中的 Throwable 类。Throwable 类有两个重要子类：
+
+Exception：程序本身可以处理的异常，可以通过 catch 来进行捕获。Exception 又分为 Checked Exception(受检查异常，必须处理) 和 Unchecked Exception（不受检查异常，可以不处理）
+
+Error：Error 属于程序无法处理的错误，建议通过 catch 捕获。例如 Java 虚拟机运行错误、虚拟机内存不够错误、类定义错误等。这些异常发生时，Java 虚拟机（JVM）一般会选择线程终止。
+
+### ✔️ClassNotFoundException 和 NoClassDefFoundError 的区别
+
+ClassNotFoundException 是 Exception，使用反射等动态加载时找不到类，是可预期的，可以捕获处理。
+
+NoClassDefFoundError 是 Error，表示 JVM 或类加载器尝试加载类定义时找不到该定义。除了运行时缺少 JAR，还可能由类初始化失败后再次使用该类等情况触发。它通常会终止当前线程，但不等于整个 JVM 必然无法继续运行。
+
+### ✔️Checked Exception 和 Unchecked Exception 有什么区别
+
+Checked Exception 即受检查异常，Java 代码在编译过程中，如果受检查异常没有被 catch 或 throws 关键字处理的话，就没法通过编译。
+
+除了 RuntimeException 及其子类以外，其它的 Exception 类及其子类都属于受检查异常。常见的受检查异常有：IO 相关的异常、ClassNotFoundException、SQLException
+
+Unchecked Exception 即不受检查异常，Java 代码在编译过程中，即使不处理不受检查异常也可以正常通过编译
+
+RuntimeException 及其子类属于非受检查异常；从 JLS 的分类来看，Error 及其子类也属于非受检查异常。常见的 RuntimeException 有：
+
+NullPointerException(空指针错误)
+
+IllegalArgumentException(参数错误比如方法入参错误)
+
+NumberFormatException(字符串转换为数字格式错误，IllegalArgumentException 的子类)
+
+ArrayIndexOutOfBoundsException(数组越界错误)
+
+ClassCastException(类型转换错误)
+
+### ✔️更倾向于使用 Checked Exception 还是 Unchecked Exception
+
+默认使用 Unchecked Exception，只有在必要时才用 Checked Exception。
+
+我们可以把 Unchecked Exception（比如 NullPointerException）看作是代码 Bug。对待 Bug，最好的方式是让它暴露出来然后去修复代码，而不是用 try-catch 去掩盖它。
+
+当这个异常是业务逻辑的一部分，并且调用方必须处理它时使用 Checked Exception，比如余额不足异常。这不是 bug，而是一个正常的业务分支，我需要用 Checked Exception 来强制调用者去处理这种情况，比如提示用户去充值。
+
+### ✔️Throwable 类常用方法有哪些
+
+String getMessage()：返回异常发生时的详细信息
+
+String toString()：返回异常发生时的简要描述
+
+String getLocalizedMessage()：返回异常对象的本地化信息。使用 Throwable 的子类覆盖这个方法，可以生成本地化信息。如果子类没有覆盖该方法，则该方法返回的信息与 getMessage() 返回的结果相同
+
+void printStackTrace()：在控制台上打印 Throwable 对象封装的异常信息
+
+### ✔️try-catch-finally 的使用
+
+try 块：用于捕获异常。其后可接零个或多个 catch 块，如果没有 catch 块，则必须跟一个 finally 块
+
+catch 块：用于处理 try 捕获到的异常。
+
+finally 块：无论是否捕获或处理异常，finally 块里的语句都会被执行。当在 try 块或 catch 块中遇到 return 语句时，finally 语句块将在方法返回之前被执行。
+
+注意不要在 finally 语句块中使用 return。当 try 语句和 finally 语句中都有 return 语句时，try 语句块中的 return 语句会被忽略。这是因为 try 语句中的 return 返回值会先被暂存在一个本地变量中，当执行到 finally 语句中的 return 之后，这个本地变量的值就变为了 finally 语句中的 return 返回值
+
+### ✔️finally 中的代码一定执行吗
+
+不一定，在某些情况下，finally 中的代码不会被执行。
+
+就比如说 finally 之前虚拟机被终止运行的话，finally 中的代码就不会被执行。
+
+另外，如果 JVM 进程被强制终止，例如调用 Runtime.halt()、操作系统直接结束进程或机器掉电，finally 块也可能来不及执行。普通的未捕获异常即使最终导致当前线程结束，在线程结束前仍会按语言规则执行 finally
+
+### 异常使用有哪些要注意的地方
+
