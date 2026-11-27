@@ -12,7 +12,33 @@
 
 常见的关系型数据库：MySQL、PostgreSQL、Oracle、SQL Server、SQLite
 
-###
+### ✔️什么是 SQL
+
+SQL 是一种结构化查询语言，专门用来与数据库打交道，目的是提供一种从数据库中读写数据的简单有效的方法。
+
+几乎所有的主流关系数据库都支持 SQL ，适用性非常强。并且，一些非关系型数据库也兼容 SQL 或者使用的是类似于 SQL 的查询语言。
+
+## MySQL 字段类型
+
+<img width="1654" height="1426" alt="summary-of-mysql-field-types" src="https://github.com/user-attachments/assets/ca252ca0-4cac-425d-95ff-718302e1441b" />
+
+### ✔️整数类型的 UNSIGNED 属性有什么用
+
+MySQL 中的整数类型可以使用可选的 UNSIGNED 属性来表示不允许负值的无符号整数。使用 UNSIGNED 属性可以将正整数的上限提高一倍，因为它不需要存储负数值。
+
+例如， TINYINT UNSIGNED 类型的取值范围是 0 ~ 255，而普通的 TINYINT 类型的值范围是 -128 ~ 127。INT UNSIGNED 类型的取值范围是 0 ~ 4,294,967,295，而普通的 INT 类型的值范围是 -2,147,483,648 ~ 2,147,483,647。
+
+对于从 0 开始递增的 ID 列，使用 UNSIGNED 属性可以非常适合，因为不允许负值并且可以拥有更大的上限范围，提供了更多的 ID 值可用。
+
+### ✔️CHAR 和 VARCHAR 的区别是什么
+
+CHAR 和 VARCHAR 是最常用到的字符串类型，两者主要的区别：CHAR 是定长字符串，VARCHAR 是变长字符串。
+
+CHAR 在存储时会在右边填充空格以达到指定的长度，检索时会去掉空格；VARCHAR 在存储时需要使用 1 或 2 个额外字节记录字符串的长度，检索时不需要处理。
+
+CHAR 更适合存储长度较短或者长度都差不多的字符串，VARCHAR 类型适合存储长度不确定或者差异较大的字符串，例如用户昵称、文章标题等。
+
+CHAR(M) 和 VARCHAR(M) 的 M 都代表能够保存的字符数的最大值，无论是字母、数字还是中文，每个都只占用一个字符。
 
 ## MySQL 索引
 
