@@ -189,6 +189,82 @@ MySQL 的隔离级别是基于锁和 MVCC 机制共同实现的。
 
 SERIALIZABLE 隔离级别是通过锁来实现的，READ-COMMITTED 和 REPEATABLE-READ 隔离级别是基于 MVCC 实现的。不过， SERIALIZABLE 之外的其他隔离级别可能也需要用到锁机制，就比如 REPEATABLE-READ 在当前读（区别于快照读）情况下需要使用加锁读来保证不会出现幻读。
 
+### ✔️InnoDB 对 MVCC 的实现
+
+MVCC 的实现依赖于：隐藏字段、Read View、undo log。在内部实现中，InnoDB 通过数据行的 DB_TRX_ID 和 Read View 来判断可见性；如果当前版本不可见，则通过数据行的 DB_ROLL_PTR 找到 undo log 中的历史版本链。每个事务快照读到的数据版本可能不一样。
+
+##### 隐藏字段
+
+InnoDB 存储引擎为每行数据添加了三个隐藏字段：
+
+DB_TRX_ID：最后一次插入或更新该行的事务 id。delete 操作本质是更新，只是在记录头的 deleted_flag 标记为已删除。
+
+DB_ROLL_PTR：回滚指针，指向 undo log 里上一个历史版本；从未被更新过的记录没有历史版本。
+
+DB_ROW_ID：表没有主键、也没有唯一非空索引时，InnoDB 使用这个 ID 生成聚簇索引.
+
+##### ReadView
+
+ReadView 主要用于快照读的可见性判断，其中 m_ids 保存快照生成瞬间活跃未提交的事务 ID 集合，不等于全部不可见事务（比如快照生成后才启动的事务）。
+
+m_low_limit_id：目前出现过的最大的事务 ID + 1，即下一个将要被分配的事务 ID。如果一条记录版本的 DB_TRX_ID 大于或等于这个值，说明修改这条记录的事务，是在当前 ReadView 创建之后才启动的，这个修改对当前事务不可见。
+
+m_up_limit_id：活跃事务列表 m_ids 中最小的事务 ID，如果 m_ids 为空，则 m_up_limit_id = m_low_limit_id。如果一条记录版本的 DB_TRX_ID 小于这个值，说明修改这条记录的事务，在 ReadView 创建之前就已经提交了，这个版本对当前事务可见。
+
+m_ids：Read View 创建时其他未提交的活跃事务 ID 列表。创建 Read View 时，将当前未提交事务 ID 记录下来，后续即使它们修改了记录行的值，对于当前事务也是不可见的。m_ids 不包括当前事务自己和已提交的事务
+
+m_creator_trx_id：创建该 Read View 的事务 ID
+
+<img width="850" height="343" alt="trans_visible-ekj9bMvL" src="https://github.com/user-attachments/assets/9b8e7c07-8eb6-4ea1-8db2-96cc2973da1e" />
+
+##### undo-log 
+
+undo log 主要有两个作用：
+
+1.事务回滚时恢复数据
+
+2.为 MVCC 提供历史版本
+
+ReadView 负责可见性判断，undo log 保存修改前的历史版本，二者配合实现 MVCC。快照读不会检查行锁；通过 ReadView 判断，如果当前最新版本对本事务不可见，就沿着 undo log 的版本链向前寻找符合可见性规则的历史版本，实现一致性非锁定读。
+
+在 InnoDB 存储引擎中 undo log 分为两种：insert undo log 和 update undo log：
+
+insert undo log：指在 insert 操作中产生的 undo log。因为 insert 操作的记录只对事务本身可见，对其他事务不可见，故该 undo log 可以在事务提交后直接删除。不需要进行 purge 操作
+
+update undo log：update、delete 产生。有可能被其他事务的 MVCC 快照读使用，事务提交时不能直接删除，交给 purge 线程后续清理。
+
+同一个记录多次被修改，会形成一条版本链。最新版本存放在数据页中，它通过 DB_ROLL_PTR 指向 undo log 里上一个旧版本；undo 中的各个旧版本之间继续用回滚指针串联，越往链的深处，版本越早。
+
+##### 数据可见性算法
+
+在 InnoDB 中，RC 隔离级别下，每次普通 SELECT 都会生成新 ReadView；RR 隔离级别下，事务里第一次普通 SELECT 时生成 ReadView，后续快照读复用这个 ReadView。
+
+快照读判断版本可见性：
+
+0. 优先判断：如果行的 trx_id == creator_trx_id，是自己事务的修改，直接可见。
+
+1. 如果 trx_id < min_trx_id：修改该记录的事务在快照生成前已经提交，版本可见。
+
+2. 如果 trx_id >= max_trx_id：修改该记录的事务在快照生成之后才开启，版本不可见。
+
+3. 如果 min_trx_id ≤ trx_id < max_trx_id：去有序的 m_ids 二分查找：
+
+   存在于 m_ids：快照时刻该事务活跃未提交 → 不可见
+
+   不存在于 m_ids：快照时刻该事务已经提交 → 可见
+
+4. 如果当前版本不可见，就通过 roll_ptr 取出 undo 版本链里上一个历史版本，重复上面的判断；直到找到可见版本，或者版本链遍历结束返回空。
+
+### ✔️RC 和 RR 隔离级别下 MVCC 的差异
+
+RC、RR 隔离级别下，快照读依靠 MVCC 实现，二者生成 ReadView 的时机不一样：
+
+RC：每一次普通快照读 SELECT 之前，都会生成新的 ReadView
+
+RR：事务内第一次普通快照读 SELECT 之前生成 ReadView，后续同事务内所有快照读复用这同一个 ReadView。
+
+注意 select ... for update、lock in share mode 属于当前读，不生成 ReadView，不走快照判断
+
 ## MySQL 锁
 
 ### ✔️表级锁和行级锁了解吗？有什么区别？
@@ -291,3 +367,5 @@ INSERT...
 UPDATE...
 DELETE...
 ```
+
+## MySQL 性能优化
