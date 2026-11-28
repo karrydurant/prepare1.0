@@ -160,6 +160,137 @@ volatile 主要用于解决变量在多个线程之间的可见性，而 synchro
 
 ## ReentrantLock
 
+### ✔️synchronized 和 ReentrantLock 有什么异同
+
+##### 两者都是可重入锁
+
+可重入锁 也叫递归锁，指的是线程可以再次获取自己的内部锁。比如一个线程获取了某个对象的锁，此时这个对象锁还没有释放，当其再次想要获取这个对象的锁的时候还是可以获取的，如果是不可重入锁的话，就会造成死锁。
+
+JDK 中常用的锁（如 synchronized、ReentrantLock、ReentrantReadWriteLock）是可重入的，但并不是所有 Lock 实现都支持可重入，例如 StampedLock 就是不可重入的。
+
+在下面的代码中，method1() 和 method2() 都被 synchronized 关键字修饰，method1() 调用了 method2()。
+
+```java
+public class SynchronizedDemo {
+    public synchronized void method1() {
+        System.out.println("方法1");
+        method2();
+    }
+
+    public synchronized void method2() {
+        System.out.println("方法2");
+    }
+}
+```
+
+由于 synchronized 锁是可重入的，同一个线程在调用 method1() 时可以直接获得当前对象的锁，执行 method2() 的时候可以再次获取这个对象的锁，不会产生死锁问题。假如 synchronized 是不可重入锁的话，由于该对象的锁已被当前线程所持有且无法释放，这就导致线程在执行 method2() 时获取锁失败，会出现死锁问题。
+
+##### synchronized 依赖于 JVM 而 ReentrantLock 依赖于 API
+
+ReentrantLock 是 JDK 层面实现的（也就是 API 层面，需要 lock() 和 unlock() 方法配合 try/finally 语句块来完成），所以我们可以通过查看它的源代码，来看它是如何实现的
+
+##### ReentrantLock 比 synchronized 增加了一些高级功能
+
+1.等待可中断：ReentrantLock 提供了一种能够中断等待锁的线程的机制，痛过 lock.lockInterruptibly() 来实现这个机制。也就是说当前线程在等待获取锁的过程中，如果其他线程中断当前线程，当前线程就会抛出 InterruptedException 异常，可以捕捉该异常进行相应处理。
+
+2.可配置公平策略：ReentrantLock 可以指定公平或非公平策略，默认是非公平的，可通过 ReentrantLock(boolean fair) 构造方法配置。synchronized 不提供公平性配置，也不承诺等待线程按先后顺序获得监视器。
+
+3.通知机制更强大：ReentrantLock 通过绑定多个 Condition 对象，可以实现分组唤醒和选择性通知。这解决了 synchronized 只能随机唤醒或全部唤醒的问题，为复杂的线程协作场景提供了支持
+
+4.支持超时：ReentrantLock 提供了 tryLock(timeout) 的方法，可以指定等待获取锁的最长等待时间，如果超过了等待时间，就会获取锁失败，不会一直等待。
+
+### ✔️关于 Condition 接口的补充
+
+Condition 是 JDK1.5 之后才有的，它具有很好的灵活性，比如可以实现多路通知功能，也就是同一个 Lock 实例可以创建多个绑定于该锁的 Condition 对象，每个 Condition 维护独立的等待队列，线程调用某个 Condition 的 await ()，就会在该条件队列上等待，signal 只唤醒该队列上的等待节点
+
+##### 通过 ReentrantLock + Condition 实现生产者消费者
+
+```java
+import java.util.LinkedList;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
+
+public class ConditionDemo {
+    // 共享队列，最大容量
+    private static final int MAX_SIZE = 5;
+    private final LinkedList<Integer> queue = new LinkedList<>();
+
+    // 显示锁
+    private final ReentrantLock lock = new ReentrantLock();
+    // 两个条件变量，两个独立等待队列
+    private final Condition notFull = lock.newCondition();
+    private final Condition notEmpty = lock.newCondition();
+
+    // 生产数据
+    public void put(int val) throws InterruptedException {
+        lock.lock();
+        try {
+            // 队列满了，在 notFull 上等待，等待非空
+            while (queue.size() == MAX_SIZE) {
+                System.out.println("队列已满，生产者等待 notFull");
+                notFull.await();
+            }
+            queue.add(val);
+            System.out.println(Thread.currentThread().getName() + " 生产：" + val + "，队列：" + queue);
+            // 生产成功，唤醒消费者
+            notEmpty().signal();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    // 消费数据
+    public int take() throws InterruptedException {
+        lock.lock();
+        try {
+            // 队列为空，在 notEmpty 上等待
+            while (queue.isEmpty()) {
+                System.out.println("队列为空，消费者等待 notEmpty");
+                notEmpty.await();
+            }
+            Integer val = queue.removeFirst();
+            System.out.println(Thread.currentThread().getName() + " 消费：" + val + "，队列：" + queue);
+            // 消费成功，唤醒生产者
+            notFull.signal();
+            return val;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public static void main(String[] args) {
+        Condition demo = new ConditionDemo();
+
+        // 生产者线程
+        Thread producer = new Thread(() -> {
+            for (int i = 1; i <= 10; i++) {
+                try {
+                    demo.put(i);
+                    Thread.sleep(300);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }, "生产者");
+
+        // 消费者线程
+        Thread consumer = new Thread(() -> {
+            for (int i = 1; i <= 10; i++) {
+                try {
+                    demo.take();
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }, "消费者");
+
+        producer.start();
+        consumer.start();
+    }
+}
+```
+
 ## 线程池
 
 ### ✔️什么是线程池
