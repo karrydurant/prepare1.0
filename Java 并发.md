@@ -150,6 +150,16 @@ public class SynchronizedDemo2 {
 
 如果是实例方法，JVM 会尝试获取实例对象的锁。如果是静态方法，JVM 会尝试获取当前 class 的锁。
 
+### ✔️synchronized 和 volatile 有什么区别
+
+volatile 关键字是线程同步的轻量级实现，所以 volatile 性能肯定比 synchronized 关键字要好。但是 volatile 关键字只能用于变量而 synchronized 关键字可以修饰方法以及代码块。
+
+volatile 关键字能保证数据的可见性，但不能保证数据的原子性。synchronized 关键字两者都能保证。
+
+volatile 主要用于解决变量在多个线程之间的可见性，而 synchronized 关键字解决的是多个线程之间访问资源的同步性
+
+## ReentrantLock
+
 ## 线程池
 
 ### ✔️什么是线程池
