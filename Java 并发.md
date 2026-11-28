@@ -404,3 +404,10 @@ PriorityBlockingQueue 是无界的，可能堆积大量的请求，从而导致 
 针对 OOM 这个问题，可以继承 PriorityBlockingQueue 并重写 offer（入队）的逻辑，当插入的元素数量超过指定值就返回 false
 
 针对饥饿问题可以把等待时间过长的任务移除并重新添加到队列中（提升优先级）
+
+## AQS 
+
+AQS 的全称为 AbstractQueuedSynchronizer，翻译过来的意思就是抽象队列同步器。这个类在 java.util.concurrent.locks 包下面。
+
+AQS 就是一个抽象类，主要用来构建锁和同步器。
+
