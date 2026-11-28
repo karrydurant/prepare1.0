@@ -58,6 +58,98 @@ Java 的 volatile 由 JMM 定义可见性和有序性保证，不能解释为"�
 
 在 Java 中，volatile 关键字除了可以保证变量的可见性，还有一个重要的作用就是防止 JVM 的指令重排序。如果将变量声明为 volatile，在对这个变量进行读写操作的时候，会通过插入特定的内存屏障的方式来禁止指令重排序
 
+## synchronized 关键字
+
+### ✔️synchronized 是什么？有什么用？
+
+synchronized 是 Java 中的一个关键字，翻译成中文是同步的意思，主要解决的是多个线程之间访问资源的同步性，可以保证被它修饰的方法或者代码块在任意时刻只能有一个线程执行。
+
+在 Java 早期版本中，synchronized 属于重量级锁，效率低下。这是因为监视器锁（monitor）是依赖于底层操作系统的 Mutex Lock 来实现的，Java 的线程是映射到操作系统的原生线程之上的。如果要挂起或者唤醒一个线程，都需要操作系统帮忙完成，而操作系统实现线程之间的切换需要从用户态转换到内核态，这个状态之间的转换需要相对比较长的时间，时间成本相对较高。
+
+不过，在 Java 6 之后， synchronized 引入了大量的优化如自旋锁、适应性自旋锁、锁消除、锁粗化、偏向锁、轻量级锁等技术来减少锁操作的开销，这些优化让 synchronized 锁的效率提升了很多
+
+### 如何使用 synchronized
+
+1.修饰实例方法
+
+给当前对象实例加锁，进入同步代码前要获得当前对象实例的锁
+
+```java
+synchronized void method() {
+
+}
+```
+
+2.修饰静态方法（锁当前类）
+
+给当前类加锁，会作用于类的所有对象实例，进入同步代码前要获得当前 class 的锁
+
+这是因为静态成员不属于任何一个实例对象，归整个类所有，不依赖于类的特定实例，被类的所有实例共享
+
+```java
+synchronized sttaic void method() {
+
+}
+```
+
+静态 synchronized 方法和非静态 synchronized 方法之间的调用互斥吗？
+
+不互斥，如果一个线程 A 调用一个实例对象的非静态 synchronized 方法，而线程 B 需要调用这个实例对象所属类的静态 synchronized 方法，是允许的，不会发生互斥现象，因为访问静态 synchronized 方法占用的锁是当前类的锁，而访问非静态 synchronized 方法占用的锁是当前实例对象锁。
+
+3.修饰代码块（锁指定对象/类）
+
+对括号里指定的对象/类加锁：
+
+synchronized(object) 表示进入同步代码块前要获得给定对象的锁
+
+synchronized(类.class) 表示进入同步代码块钱要获得给定 Class 的锁
+
+```java
+synchronized(this) {
+
+}
+```
+
+### 构造方法可以用 synchronized 修饰吗
+
+### ✔️synchronized 底层原理了解吗
+
+##### synchronized 修饰同步语句块的情况
+
+```java
+public class SynchronizedDemo {
+    public void method() {
+        synchronized (this) {
+            System.out.println("synchronized 代码块");
+        }
+    }
+}
+```
+
+通过查看字节码可以发现：synchronized 同步语句块的实现使用的是 monitorenter 和 monitorexit 指令，其中 monitorenter 指令指向同步代码块的开始位置，monitorexit 指令则指明同步代码块的结束位置。
+
+上述代码对应的字节码出现了两处 monitorexit 指令，这是为了保证锁在同步代码块正常执行以及出现异常的这两种情况下都能被正确释放。
+
+当执行 monitorenter 指令时，线程试图获取锁也就是获取对象监视器 monitor 的持有权，如果锁的计数器为 0 则表示锁可以被获取，获取后将锁计数器设为 1 也就是加 1
+
+HotSpot 里 Java 的 synchronized 底层依赖 ObjectMonitor（监视器）；每个 Java 对象在底层都绑定一个 Monitor；wait() / notify() / notifyAll() 是操作这个 Monitor 的，调用前你必须先拿到这个对象的 Monitor 锁，没拿到就会直接抛 IllegalMonitorStateException。这也就是为什么 wait() / notify() / notifyAll() 需要在 synchronized 内部执行，因为在外部就代表当前不持有对象的监视器锁
+
+对象锁的拥有者线程才可以执行 monitorexit 指令来释放锁。在执行 monitorexit 指令后，将锁计数器设为 0，表明锁被释放，其他线程可以尝试获取锁。
+
+##### synchronized 修饰方法的情况
+
+```java
+public class SynchronizedDemo2 {
+    public synchronized void method() {
+        System.out.println("synchronized 方法");
+    }
+}
+```
+
+这种情况并没有用 monitorenter 指令和 monitorexit 指令，取而代之的是 ACC_SYNCHRONIZED 标识，该标识指明了该方法是一个同步方法。JVM 通过该 ACC_SYNCHRONIZED 访问标志来辨别一个方法是否声明为同步方法，从而执行相应的同步调用。
+
+如果是实例方法，JVM 会尝试获取实例对象的锁。如果是静态方法，JVM 会尝试获取当前 class 的锁。
+
 ## 线程池
 
 ### ✔️什么是线程池
