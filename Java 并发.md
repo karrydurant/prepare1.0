@@ -82,11 +82,17 @@ Java 的 volatile 由 JMM 定义可见性和有序性保证，不能解释为"�
 
 ### 为什么不推荐使用内置线程池
 
-### 线程池的拒绝策略有哪些
+### ✔️线程池的拒绝策略有哪些
+
+如果当前运行的线程数量达到最大线程数并且队列已经被放满了任务时，ThreadPoolExecutor 定义了一些策略：
 
 ThreadPoolExecutor.AbortPolicy：抛出 RejectedExecutionException 来拒绝新任务的处理
 
-ThreadPoolExecutor.CallerRunsPolicy：
+ThreadPoolExecutor.CallerRunsPolicy：调用执行者自己的线程运行任务，也就是直接在调用 execute 方法的线程中运行被拒绝的任务，如果执行线程已关闭则会丢弃该任务。这种策略会降低对于新任务提交速度，影响程序的整体性能。如果应用程序可以承受此延迟并且要求任何一个任务请求都要被执行的话，可以选择这个策略。
+
+ThreadPoolExecutor.DiscardPolicy：不处理新任务，直接丢弃掉
+
+ThreadPoolExecutor.DiscardOldestPolicy：此策略将丢弃最早的未处理的任务请求
 
 ### 线程池常用的阻塞队列有哪些
 
