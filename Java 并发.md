@@ -82,6 +82,12 @@ Java 的 volatile 由 JMM 定义可见性和有序性保证，不能解释为"�
 
 ### 为什么不推荐使用内置线程池
 
+### 线程池的拒绝策略有哪些
+
+ThreadPoolExecutor.AbortPolicy：抛出 RejectedExecutionException 来拒绝新任务的处理
+
+ThreadPoolExecutor.CallerRunsPolicy：
+
 ### 线程池常用的阻塞队列有哪些
 
 
