@@ -411,3 +411,10 @@ AQS 的全称为 AbstractQueuedSynchronizer，翻译过来的意思就是抽象�
 
 AQS 就是一个抽象类，主要用来构建锁和同步器。
 
+AQS 为构建锁和同步器提供了一些通用功能的实现。因此，使用 AQS 能简单且高效地构造出应用广泛的大量同步器，比如 ReentrantLock、Semaphore、ReentrantReadWriteLock 等。SynchronousQueue 虽然也使用等待队列和 CAS 实现线程配对，但并不基于 AQS。
+
+### ✔️AQS 的作用是什么
+
+AQS 解决了开发者在实现同步器时的复杂性问题。它提供了一个通用框架，用于实现各种同步器。通过封装底层的线程同步机制，AQS 将复杂的线程管理逻辑隐藏起来，使开发者只需专注于具体的同步逻辑。
+
+### AQS 为什么使用 CLH 锁队列的变体
